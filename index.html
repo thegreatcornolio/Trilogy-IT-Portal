@@ -364,21 +364,23 @@ async function signIn(){
 function signOut(){ msalInstance.logoutRedirect(); }
 
 async function checkAccess(){
-  // Admin always has access
   S.isAdmin = (S.email === ADMIN_EMAIL);
+  console.log('checkAccess, isAdmin=', S.isAdmin);
   try {
     var d = await flow(FLOWS.CHECK_IT_ACCESS, { email: S.email });
     var rows = rowsFrom(d);
     var allowed = S.isAdmin || rows.some(function(r){ return (r.Email||'').toLowerCase() === S.email; });
+    console.log('access flow ok, allowed=', allowed);
     if(!allowed){ showScreen('denied-screen'); return; }
   } catch(e){
-    // If access flow isn't built yet, only let the admin in
+    console.log('access flow failed:', e.message, '— admin fallback:', S.isAdmin);
     if(!S.isAdmin){
       showScreen('denied-screen');
       gi('denied-sub').textContent = 'Access check unavailable. Contact an administrator.';
       return;
     }
   }
+  console.log('entering portal');
   enterPortal();
 }
 
