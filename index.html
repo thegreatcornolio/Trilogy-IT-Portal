@@ -328,16 +328,23 @@ async function flow(url, body){
 
 // ── AUTH ──
 async function init(){
+  console.log('init start, url=', window.location.href);
   await msalInstance.initialize();
+  console.log('msal initialized');
   try {
     var resp = await msalInstance.handleRedirectPromise();
-    var account = resp ? resp.account : (msalInstance.getAllAccounts()[0] || null);
-    if(!account){ showScreen('login-screen'); return; }
+    console.log('handleRedirectPromise resp=', resp);
+    var accounts = msalInstance.getAllAccounts();
+    console.log('accounts found=', accounts.length, accounts);
+    var account = resp ? resp.account : (accounts[0] || null);
+    if(!account){ console.log('no account -> login screen'); showScreen('login-screen'); return; }
     S.account = account;
     S.email = (account.username||'').toLowerCase();
+    console.log('logged in as', S.email);
     msalInstance.setActiveAccount(account);
     await checkAccess();
   } catch(e){
+    console.error('init error:', e);
     showScreen('login-screen');
     gi('login-err').style.display='block';
     gi('login-err').textContent='Sign-in error: '+e.message;
