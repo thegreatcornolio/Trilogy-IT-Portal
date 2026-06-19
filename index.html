@@ -301,9 +301,17 @@ var msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 // ── HELPERS ──
 function gi(id){return document.getElementById(id);}
 function showScreen(id){
-  ['login-screen','denied-screen','portal'].forEach(function(s){gi(s).classList.remove('active');});
-  gi(id).classList.add('active');
+  ['login-screen','denied-screen','portal'].forEach(function(s){
+    var el=gi(s);
+    el.classList.remove('active');
+    el.style.display='none';
+  });
+  var target=gi(id);
+  target.classList.add('active');
+  target.style.display = (id==='portal') ? 'block' : 'flex';
   gi('loading-overlay').classList.add('hidden');
+  gi('loading-overlay').style.display='none';
+  console.log('showScreen ->', id, 'display=', target.style.display);
 }
 function toast(msg){var t=gi('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2600);}
 function initials(f,l){return((f||'')[0]||'').toUpperCase()+((l||'')[0]||'').toUpperCase();}
