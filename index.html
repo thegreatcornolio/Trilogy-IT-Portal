@@ -230,6 +230,7 @@ body{overflow-x:hidden;font-family:'Wix Madefor Text',sans-serif;background:var(
       <div class="tab" data-tab="accounts" onclick="switchTab('accounts',this)">📧 Account Creation<span class="tab-count" id="cnt-accounts">0</span></div>
       <div class="tab" data-tab="needs" onclick="switchTab('needs',this)">📨 Needs Account<span class="tab-count" id="cnt-needs">0</span></div>
       <div class="tab" data-tab="done" onclick="switchTab('done',this)">✓ Completed<span class="tab-count" id="cnt-done">0</span></div>
+      <div class="tab" data-tab="offboarding" onclick="switchTab('offboarding',this)">🚪 Offboarding<span class="tab-count" id="cnt-offboarding">0</span></div>
       <div class="tab tab-admin-only" data-tab="access" onclick="switchTab('access',this)">⚙️ Access</div>
     </div>
 
@@ -259,6 +260,11 @@ body{overflow-x:hidden;font-family:'Wix Madefor Text',sans-serif;background:var(
     <!-- DONE -->
     <div class="tab-panel" id="panel-done">
       <div class="queue-grid" id="grid-done"></div>
+    </div>
+
+    <!-- OFFBOARDING -->
+    <div class="tab-panel" id="panel-offboarding">
+      <div class="queue-grid" id="grid-offboarding"></div>
     </div>
 
     <!-- ACCESS (admin) -->
@@ -305,13 +311,17 @@ var FLOWS = {
   UPDATE_IT_TASK:   'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/27798c90d8424e43bbbe1c5540c5607b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=FyVvvjBtVJFzcz2AwxaqByQFkx7KHXRmldNQ3qwer8g',
   SYNC_M365_EMAIL:  'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/75902f227946435bb98bfb16ba1970aa/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=HS8F-_XuIAc55VmQyKBv5S2xZ1Gey84kCpdTtucqvrc',
   GET_NEEDS_ACCOUNT: 'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/393cc9f6f2384eb4bc84b82f480d3cd9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=tm2Bco5-78DTXHpki3yGspaqT5bm26fwL7JY0g5oF1M',
-  SET_WORK_EMAIL:    'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8a0c724763cc48469db93072cf172df2/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=VqodDeuqNzRAG38AQXvH0fgznkmaRyd4kxODJq2lQuI'
+  SET_WORK_EMAIL:    'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8a0c724763cc48469db93072cf172df2/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=VqodDeuqNzRAG38AQXvH0fgznkmaRyd4kxODJq2lQuI',
+  // Same query HR's finalize page uses (GET_OFFBOARDING_DETAIL) — already returns everything this tab needs:
+  GET_IT_OFFBOARDING:    'https://default77cde95f930f495e89c64d2c30f6df.21.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3e8ec30507b1437e9b16e08d492af12f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=XogNNWvq0rNc876X2512jbLxg4i_kYW2vEFkq_8TYho',
+  // ⚠️ Build UPDATE_IT_OFFBOARDING per the plan, then paste its URL here:
+  UPDATE_IT_OFFBOARDING: 'PASTE_UPDATE_IT_OFFBOARDING_FLOW_URL_HERE'
 };
 
 var ADMIN_EMAIL = 'craigs@trilogybpo.com';
 
 // ── STATE ──
-var S = { account:null, email:'', isAdmin:false, queue:[], access:[], needsAccount:[], activeTab:'hardware' };
+var S = { account:null, email:'', isAdmin:false, queue:[], access:[], needsAccount:[], offboarding:[], activeTab:'hardware' };
 
 var msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 
@@ -404,7 +414,13 @@ function enterPortal(){
   showScreen('portal');
   loadQueue();
   loadNeedsAccount();
+  loadOffboardingQueue();
   if(S.isAdmin) loadAccess();
+  var deepTab=new URLSearchParams(window.location.search).get('tab');
+  if(deepTab){
+    var el=document.querySelector('.tab[data-tab="'+deepTab+'"]');
+    if(el) switchTab(deepTab, el);
+  }
 }
 
 // ── QUEUE ──
@@ -438,6 +454,59 @@ function renderQueue(){
 }
 
 function emptyMsg(ico,title,sub){ return '<div class="empty" style="grid-column:1/-1"><div class="empty-ico">'+ico+'</div><div class="empty-title">'+title+'</div><div>'+sub+'</div></div>'; }
+
+// ── OFFBOARDING ──
+async function loadOffboardingQueue(){
+  try {
+    var d = await flow(FLOWS.GET_IT_OFFBOARDING, {});
+    S.offboarding = rowsFrom(d);
+  } catch(e){
+    S.offboarding = [];
+    gi('grid-offboarding').innerHTML = emptyMsg('⚠️','Unavailable', e.message);
+    gi('cnt-offboarding').textContent = 0;
+    return;
+  }
+  renderOffboarding();
+}
+
+function renderOffboarding(){
+  gi('cnt-offboarding').textContent = S.offboarding.length;
+  gi('grid-offboarding').innerHTML = S.offboarding.length
+    ? S.offboarding.map(obCard).join('')
+    : emptyMsg('🚪','No offboarding in progress','Employees appear here once a manager starts their offboarding.');
+}
+
+function obCard(t){
+  var equipDone = t.EquipmentReturned===true||t.EquipmentReturned===1||t.EquipmentReturned==='1';
+  var accessDone = t.SystemAccessRevoked===true||t.SystemAccessRevoked===1||t.SystemAccessRevoked==='1';
+  var fullName = ((t.FirstName||'')+' '+(t.LastName||'')).trim();
+  var safeName = fullName.replace(/'/g,"\\'");
+  return '<div class="it-card">'+
+    '<div class="it-card-head"><div class="it-avatar">'+initials(t.FirstName,t.LastName)+'</div>'+
+      '<div><div class="it-name">'+fullName+'</div><div class="it-meta">'+(t.ExitType||'—')+' · Last day '+fmtDate(t.LastWorkingDay)+'</div></div></div>'+
+    '<div class="it-card-body">'+
+      '<div class="it-row"><span class="it-row-k">Hardware</span><span class="it-row-v">'+(equipDone?statusPill('Reclaimed'):statusPill('Pending'))+'</span></div>'+
+      '<div class="it-row"><span class="it-row-k">System access</span><span class="it-row-v">'+(accessDone?statusPill('Revoked'):statusPill('Pending'))+'</span></div>'+
+      '<div class="it-actions">'+
+        (equipDone?'':'<button class="btn btn-green btn-block" onclick="markOffboarding('+t.ChecklistID+',\'equipment\',\''+safeName+'\')">✓ Hardware reclaimed</button>')+
+        (accessDone?'':'<button class="btn btn-green btn-block" onclick="markOffboarding('+t.ChecklistID+',\'access\',\''+safeName+'\')">✓ Access revoked</button>')+
+        (equipDone&&accessDone?'<div class="it-row" style="color:var(--green-dark);font-weight:700;font-size:12px">✓ Both checks complete — awaiting HR finalize</div>':'')+
+      '</div>'+
+    '</div></div>';
+}
+
+async function markOffboarding(checklistId, field, employeeName){
+  try {
+    await flow(FLOWS.UPDATE_IT_OFFBOARDING, {
+      checklist_id: checklistId,
+      field: field,
+      by: (S.account && S.account.name) || S.email,
+      employee_name: employeeName
+    });
+    toast(field==='equipment' ? 'Hardware marked reclaimed' : 'Access marked revoked');
+    await loadOffboardingQueue();
+  } catch(e){ toast('Error: '+e.message); }
+}
 
 // ── NEEDS ACCOUNT (existing employees, no work email) ──
 async function loadNeedsAccount(){
